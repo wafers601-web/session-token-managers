@@ -118,7 +118,27 @@
         if (data.success) {
           alert(`Successfully imported ${data.count} entries!`);
           document.getElementById('jsonInput').value = '';
-          loadInventory();
+          
+          if (data.accounts) {
+            document.getElementById('activeCount').innerText = data.accounts.length;
+            const tbody = document.getElementById('accountTable');
+            tbody.innerHTML = '';
+            data.accounts.forEach(acc => {
+              tbody.innerHTML += `
+                <tr class="hover:bg-gray-750">
+                  <td class="p-4 font-medium">${acc.user_identifier}</td>
+                  <td class="p-4 text-gray-400">${acc.access_tier}</td>
+                  <td class="p-4 font-mono text-xs text-indigo-300">${acc.token_string.slice(0, 25)}...</td>
+                  <td class="p-4"><span class="bg-green-900 text-green-300 text-xs px-2.5 py-1 rounded-full">${acc.status}</span></td>
+                  <td class="p-4">
+                    <button onclick="navigator.clipboard.writeText('${acc.token_string}'); alert('Token Copied!')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-xs">Copy Token</button>
+                  </td>
+                </tr>
+              `;
+            });
+          } else {
+            loadInventory();
+          }
         } else {
           alert('Error: ' + data.error);
         }
