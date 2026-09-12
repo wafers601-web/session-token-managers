@@ -1,10 +1,30 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const DB_FILE = '/tmp/db.json';
 
-let accountsStore = [];
+// Persistent file handler for Vercel /tmp directory
+function getDB() {
+  try {
+    if (!fs.existsSync(DB_FILE)) {
+      fs.writeFileSync(DB_FILE, JSON.stringify([]));
+      return [];
+    }
+    const data = fs.readFileSync(DB_FILE, 'utf8');
+    return JSON.parse(data || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveDB(data) {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+  } catch (e) {}
+}
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -22,7 +42,6 @@ const decryptPayload = (token) => {
   }
 };
 
-// Advanced Robust Line-by-Line Cookie Extractor
 function parseAllCookieBlocks(inputText) {
   if (typeof inputText === 'object') {
     return Array.isArray(inputText) ? [inputText] : [[inputText]];
@@ -31,7 +50,6 @@ function parseAllCookieBlocks(inputText) {
   const str = String(inputText).trim();
   const validBlocks = [];
 
-  // Strategy 1: Extract every [{...}] or {...} block using Regex Global match
   const blocks = str.match(/\[\s*\{[\s\S]*?\}\s*\]/g);
 
   if (blocks && blocks.length > 0) {
@@ -45,7 +63,6 @@ function parseAllCookieBlocks(inputText) {
     });
   }
 
-  // Strategy 2: Fallback line-by-line parsing if Strategy 1 found nothing
   if (validBlocks.length === 0) {
     const lines = str.split('\n');
     lines.forEach(line => {
@@ -81,27 +98,28 @@ app.get('/launch', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'launch.html'));
 });
 
-// API: Get Inventory Count & Accounts
+// API: Get Inventory
 app.get('/api/inventory', (req, res) => {
+  const accountsStore = getDB();
   const activeCount = accountsStore.filter(a => a.status === 'active' && !a.is_used).length;
   res.json({ total_active: activeCount, accounts: accountsStore });
 });
 
-// API: Import Bulk Cookies JSON (Supports Multi-line JSON Arrays)
+// API: Import Cookies
 app.post('/api/import', (req, res) => {
   const { raw_data } = req.body;
   if (!raw_data) return res.status(400).json({ error: 'No data provided' });
 
   try {
     const cookieBlocks = parseAllCookieBlocks(raw_data);
+    let accountsStore = getDB();
     let importedCount = 0;
 
     cookieBlocks.forEach((parsedArray, idx) => {
       const id = Date.now().toString() + '_' + idx;
       const token = 'TOKEN-AES-' + encryptPayload(parsedArray);
 
-      // Search for email cookie or construct dynamic account name
-      let email = `Account_${importedCount + 1}_${id.slice(-4)}`;
+      let email = `Account_${accountsStore.length + 1}_${id.slice(-4)}`;
       if (Array.isArray(parsedArray)) {
         const emailCookie = parsedArray.find(c => c && c.name && c.name.toLowerCase().includes('email'));
         if (emailCookie) email = emailCookie.value;
@@ -120,13 +138,14 @@ app.post('/api/import', (req, res) => {
       importedCount++;
     });
 
-    res.json({ success: true, count: importedCount });
+    saveDB(accountsStore);
+    res.json({ success: true, count: importedCount, accounts: accountsStore });
   } catch (err) {
     res.status(400).json({ error: 'Failed to extract valid cookies. Check text formatting.' });
   }
 });
 
-// API: Redeem / Validate Token
+// API: Redeem / Validate
 app.post('/api/redeem', (req, res) => {
   const { token_string } = req.body;
   if (!token_string) return res.status(400).json({ error: 'Token is required' });
