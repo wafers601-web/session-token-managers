@@ -4,14 +4,15 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DB_FILE = '/tmp/db.json';
+const DB_FILE = path.join(__dirname, 'db.json');
+
+// Initialize persistent JSON database if not exists
+if (!fs.existsSync(DB_FILE)) {
+  fs.writeFileSync(DB_FILE, JSON.stringify([]));
+}
 
 function getDB() {
   try {
-    if (!fs.existsSync(DB_FILE)) {
-      fs.writeFileSync(DB_FILE, JSON.stringify([]));
-      return [];
-    }
     const data = fs.readFileSync(DB_FILE, 'utf8');
     return JSON.parse(data || '[]');
   } catch (e) {
@@ -45,7 +46,6 @@ function parseAndFormatCookies(inputText) {
       let netflixId = '';
       let secureId = '';
 
-      // Search for email and Netflix authentication keys inside cookies
       parsedArray.forEach(cookie => {
         if (!cookie || !cookie.name) return;
         
@@ -63,7 +63,6 @@ function parseAndFormatCookies(inputText) {
       // Active status check: Must contain at least NetflixId to be functional
       const isActive = Boolean(netflixId);
 
-      // Generate a true-to-format Netflix nftoken string structure
       const rawPayload = `nid=${netflixId}&sid=${secureId}&time=${Date.now()}`;
       const generatedToken = 'Bgi' + Buffer.from(rawPayload).toString('base64')
         .replace(/=/g, '')
@@ -141,8 +140,6 @@ app.post('/api/redeem', (req, res) => {
   });
 });
 
-module.exports = app;
-
-if (require.main === module) {
-  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-}
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
