@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Token Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen p-6">
+  <div class="max-w-4xl mx-auto space-y-6">
+    <div class="flex justify-between items-center border-b border-gray-800 pb-4">
+      <h1 class="text-2xl font-bold text-indigo-400">Session Token Dashboard</h1>
+      <div class="bg-indigo-900/50 border border-indigo-500 text-indigo-200 px-4 py-2 rounded-lg font-semibold">
+        Available Tokens: <span id="activeCount" class="text-white font-bold">0</span>
+      </div>
+    </div>
+
+    <!-- Bulk Upload -->
+    <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 space-y-4">
+      <h2 class="text-lg font-semibold text-gray-200">Import Bulk Cookies (JSON)</h2>
+      <textarea id="jsonInput" rows="5" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:border-indigo-500 font-mono" placeholder="Paste JSON array or single cookie object here..."></textarea>
+      <button onclick="importCookies()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2.5 rounded-lg transition">Import & Generate Tokens</button>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+      <table class="w-full text-left border-collapse">
+        <thead class="bg-gray-950 text-gray-400 text-xs uppercase">
+          <tr>
+            <th class="p-4">Identifier</th>
+            <th class="p-4">Tier</th>
+            <th class="p-4">Encrypted Token</th>
+            <th class="p-4">Status</th>
+            <th class="p-4">Action</th>
+          </tr>
+        </thead>
+        <tbody id="accountTable" class="divide-y divide-gray-700 text-sm">
+          <!-- Dynamic Records -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    async function loadInventory() {
+      const res = await fetch('/api/inventory');
+      const data = await res.json();
+      document.getElementById('activeCount').innerText = data.total_active;
+      
+      const tbody = document.getElementById('accountTable');
+      tbody.innerHTML = '';
+      
+      data.accounts.forEach(acc => {
+        tbody.innerHTML += `
+          <tr class="hover:bg-gray-750">
+            <td class="p-4 font-medium">${acc.user_identifier}</td>
+            <td class="p-4 text-gray-400">${acc.access_tier}</td>
+            <td class="p-4 font-mono text-xs text-indigo-300">${acc.token_string.slice(0, 25)}...</td>
+            <td class="p-4"><span class="bg-green-900 text-green-300 text-xs px-2.5 py-1 rounded-full">${acc.status}</span></td>
+            <td class="p-4">
+              <button onclick="navigator.clipboard.writeText('${acc.token_string}'); alert('Token Copied!')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-xs">Copy Token</button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    async function importCookies() {
+      const raw = document.getElementById('jsonInput').value;
+      if (!raw) return alert('Paste JSON first');
+
+      const res = await fetch('/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw_data: raw })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        alert(`Successfully imported ${data.count} entries!`);
+        document.getElementById('jsonInput').value = '';
+        loadInventory();
+      } else {
+        alert('Error: ' + data.error);
+      }
+    }
+
+    loadInventory();
+  </script>
+</body>
+</html>
