@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Session Launcher</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen flex items-center justify-center p-4">
+  <div class="bg-gray-900 border border-gray-800 p-8 rounded-2xl max-w-md w-full shadow-2xl space-y-6">
+    <div class="text-center space-y-2">
+      <h1 class="text-2xl font-bold text-indigo-400">Web Session Launcher</h1>
+      <p class="text-gray-400 text-sm">Paste your generated session token string to initiate login redirection.</p>
+    </div>
+
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs uppercase font-medium text-gray-400 mb-1">Session Token</label>
+        <input id="tokenInput" type="text" placeholder="TOKEN-AES-..." class="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:border-indigo-500 font-mono">
+      </div>
+
+      <button onclick="launchSession()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-lg transition shadow-lg shadow-indigo-600/30">
+        Launch Session
+      </button>
+    </div>
+
+    <div id="statusBox" class="hidden p-4 rounded-lg text-sm border font-mono"></div>
+  </div>
+
+  <script>
+    async function launchSession() {
+      const token = document.getElementById('tokenInput').value.trim();
+      const statusBox = document.getElementById('statusBox');
+      statusBox.classList.add('hidden');
+
+      if (!token) return alert('Please enter a valid token string.');
+
+      const res = await fetch('/api/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token_string: token })
+      });
+      const data = await res.json();
+
+      statusBox.classList.remove('hidden');
+      if (data.success) {
+        statusBox.className = 'p-4 rounded-lg text-sm border bg-green-950/40 border-green-800 text-green-300 font-mono';
+        statusBox.innerHTML = `✓ <b>Success:</b> ${data.message}<br><br><span class="text-xs text-gray-400">Payload ready for active session redirection.</span>`;
+      } else {
+        statusBox.className = 'p-4 rounded-lg text-sm border bg-red-950/40 border-red-800 text-red-300 font-mono';
+        statusBox.innerHTML = `✗ <b>Error:</b> ${data.error}`;
+      }
+    }
+  </script>
+</body>
+</html>
