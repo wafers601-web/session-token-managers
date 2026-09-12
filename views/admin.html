@@ -6,24 +6,41 @@
   <title>Admin Dashboard - Token Manager</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-900 text-white min-h-screen p-6">
+<body class="bg-gray-900 text-white min-h-screen p-4 md:p-6">
   <div class="max-w-4xl mx-auto space-y-6">
     <div class="flex justify-between items-center border-b border-gray-800 pb-4">
-      <h1 class="text-2xl font-bold text-indigo-400">Session Token Dashboard</h1>
-      <div class="bg-indigo-900/50 border border-indigo-500 text-indigo-200 px-4 py-2 rounded-lg font-semibold">
+      <h1 class="text-xl md:text-2xl font-bold text-indigo-400">Session Token Dashboard</h1>
+      <div class="bg-indigo-900/50 border border-indigo-500 text-indigo-200 px-4 py-2 rounded-lg font-semibold text-sm md:text-base">
         Available Tokens: <span id="activeCount" class="text-white font-bold">0</span>
       </div>
     </div>
 
-    <!-- Bulk Upload -->
+    <!-- Import Section -->
     <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 space-y-4">
-      <h2 class="text-lg font-semibold text-gray-200">Import Bulk Cookies (JSON)</h2>
-      <textarea id="jsonInput" rows="5" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:border-indigo-500 font-mono" placeholder="Paste JSON array or single cookie object here..."></textarea>
-      <button onclick="importCookies()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2.5 rounded-lg transition">Import & Generate Tokens</button>
+      <h2 class="text-lg font-semibold text-gray-200">Import Session Data</h2>
+      
+      <!-- File Upload Zone -->
+      <div class="border-2 border-dashed border-gray-600 hover:border-indigo-500 rounded-lg p-6 text-center bg-gray-900/50 cursor-pointer transition" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" class="hidden" accept="*/*" multiple onchange="handleFileUpload(event)">
+        <svg class="mx-auto h-10 w-10 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+        </svg>
+        <p class="text-sm font-medium text-gray-300">Click to upload or drag files here</p>
+        <p class="text-xs text-gray-500 mt-1">Accepts .json, .txt, .csv, or raw session files</p>
+      </div>
+
+      <div class="text-center text-xs text-gray-500 font-bold uppercase">— OR PASTE TEXT DIRECTLY —</div>
+
+      <!-- Textarea -->
+      <textarea id="jsonInput" rows="4" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:border-indigo-500 font-mono" placeholder="Paste JSON array or single cookie text here..."></textarea>
+      
+      <button onclick="importCookies()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-3 rounded-lg transition shadow-lg shadow-indigo-600/30">
+        Import & Generate Tokens
+      </button>
     </div>
 
     <!-- Table -->
-    <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+    <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-x-auto">
       <table class="w-full text-left border-collapse">
         <thead class="bg-gray-950 text-gray-400 text-xs uppercase">
           <tr>
@@ -43,45 +60,70 @@
 
   <script>
     async function loadInventory() {
-      const res = await fetch('/api/inventory');
-      const data = await res.json();
-      document.getElementById('activeCount').innerText = data.total_active;
-      
-      const tbody = document.getElementById('accountTable');
-      tbody.innerHTML = '';
-      
-      data.accounts.forEach(acc => {
-        tbody.innerHTML += `
-          <tr class="hover:bg-gray-750">
-            <td class="p-4 font-medium">${acc.user_identifier}</td>
-            <td class="p-4 text-gray-400">${acc.access_tier}</td>
-            <td class="p-4 font-mono text-xs text-indigo-300">${acc.token_string.slice(0, 25)}...</td>
-            <td class="p-4"><span class="bg-green-900 text-green-300 text-xs px-2.5 py-1 rounded-full">${acc.status}</span></td>
-            <td class="p-4">
-              <button onclick="navigator.clipboard.writeText('${acc.token_string}'); alert('Token Copied!')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-xs">Copy Token</button>
-            </td>
-          </tr>
-        `;
-      });
+      try {
+        const res = await fetch('/api/inventory');
+        const data = await res.json();
+        document.getElementById('activeCount').innerText = data.total_active;
+        
+        const tbody = document.getElementById('accountTable');
+        tbody.innerHTML = '';
+        
+        if (!data.accounts || data.accounts.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">No tokens generated yet. Upload a file above.</td></tr>`;
+          return;
+        }
+
+        data.accounts.forEach(acc => {
+          tbody.innerHTML += `
+            <tr class="hover:bg-gray-750">
+              <td class="p-4 font-medium">${acc.user_identifier}</td>
+              <td class="p-4 text-gray-400">${acc.access_tier}</td>
+              <td class="p-4 font-mono text-xs text-indigo-300">${acc.token_string.slice(0, 25)}...</td>
+              <td class="p-4"><span class="bg-green-900 text-green-300 text-xs px-2.5 py-1 rounded-full">${acc.status}</span></td>
+              <td class="p-4">
+                <button onclick="navigator.clipboard.writeText('${acc.token_string}'); alert('Token Copied!')" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-xs">Copy Token</button>
+              </td>
+            </tr>
+          `;
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function handleFileUpload(event) {
+      const files = event.target.files;
+      if (!files.length) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('jsonInput').value = e.target.result;
+        alert(`File "${files[0].name}" loaded into the text area! Click "Import & Generate Tokens" to process.`);
+      };
+      reader.readAsText(files[0]);
     }
 
     async function importCookies() {
-      const raw = document.getElementById('jsonInput').value;
-      if (!raw) return alert('Paste JSON first');
+      const raw = document.getElementById('jsonInput').value.trim();
+      if (!raw) return alert('Please upload a file or paste text first.');
 
-      const res = await fetch('/api/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw_data: raw })
-      });
-      const data = await res.json();
+      try {
+        const res = await fetch('/api/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ raw_data: raw })
+        });
+        const data = await res.json();
 
-      if (data.success) {
-        alert(`Successfully imported ${data.count} entries!`);
-        document.getElementById('jsonInput').value = '';
-        loadInventory();
-      } else {
-        alert('Error: ' + data.error);
+        if (data.success) {
+          alert(`Successfully imported ${data.count} entries!`);
+          document.getElementById('jsonInput').value = '';
+          loadInventory();
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (err) {
+        alert('Failed to process data. Ensure valid formatting.');
       }
     }
 
