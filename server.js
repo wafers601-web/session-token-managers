@@ -22,33 +22,50 @@ const decryptPayload = (token) => {
   }
 };
 
-// Helper: Smart JSON Extraction & Sanitizer
-function parseSmartCookies(inputText) {
-  if (typeof inputText === 'object') return inputText;
-  
-  let str = String(inputText).trim();
-
-  // 1. Try direct JSON parse first
-  try {
-    return JSON.parse(str);
-  } catch (e) {}
-
-  // 2. Extract valid JSON blocks [...] or {...} if text has headers/watermarks
-  const jsonArrayMatch = str.match(/\[\s*\{[\s\S]*\}\s*\]/);
-  if (jsonArrayMatch) {
-    try {
-      return JSON.parse(jsonArrayMatch[0]);
-    } catch (e) {}
+// Advanced Robust Line-by-Line Cookie Extractor
+function parseAllCookieBlocks(inputText) {
+  if (typeof inputText === 'object') {
+    return Array.isArray(inputText) ? [inputText] : [[inputText]];
   }
 
-  const jsonObjectMatch = str.match(/\{[\s\S]*\}/);
-  if (jsonObjectMatch) {
-    try {
-      return JSON.parse(jsonObjectMatch[0]);
-    } catch (e) {}
+  const str = String(inputText).trim();
+  const validBlocks = [];
+
+  // Strategy 1: Extract every [{...}] or {...} block using Regex Global match
+  const blocks = str.match(/\[\s*\{[\s\S]*?\}\s*\]/g);
+
+  if (blocks && blocks.length > 0) {
+    blocks.forEach(blockStr => {
+      try {
+        const parsed = JSON.parse(blockStr);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          validBlocks.push(parsed);
+        }
+      } catch (e) {}
+    });
   }
 
-  throw new Error("Unable to extract valid JSON data format.");
+  // Strategy 2: Fallback line-by-line parsing if Strategy 1 found nothing
+  if (validBlocks.length === 0) {
+    const lines = str.split('\n');
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            validBlocks.push(parsed);
+          }
+        } catch (e) {}
+      }
+    });
+  }
+
+  if (validBlocks.length === 0) {
+    throw new Error("No valid JSON cookie blocks detected.");
+  }
+
+  return validBlocks;
 }
 
 // Routes
@@ -70,30 +87,23 @@ app.get('/api/inventory', (req, res) => {
   res.json({ total_active: activeCount, accounts: accountsStore });
 });
 
-// API: Import Bulk Cookies JSON with Cleaner
+// API: Import Bulk Cookies JSON (Supports Multi-line JSON Arrays)
 app.post('/api/import', (req, res) => {
   const { raw_data } = req.body;
   if (!raw_data) return res.status(400).json({ error: 'No data provided' });
 
   try {
-    let parsed = parseSmartCookies(raw_data);
-    
-    // Convert single object to array for consistent handling
-    if (!Array.isArray(parsed)) {
-      parsed = [parsed];
-    }
-
+    const cookieBlocks = parseAllCookieBlocks(raw_data);
     let importedCount = 0;
 
-    // Check if array contains valid cookie elements
-    if (parsed.length > 0) {
-      const id = Date.now().toString();
-      const token = 'TOKEN-AES-' + encryptPayload(parsed);
-      
-      // Extract Email or fallback identifier
-      let email = `Account_${id.slice(-4)}`;
-      if (Array.isArray(parsed)) {
-        const emailCookie = parsed.find(c => c && c.name && c.name.toLowerCase().includes('email'));
+    cookieBlocks.forEach((parsedArray, idx) => {
+      const id = Date.now().toString() + '_' + idx;
+      const token = 'TOKEN-AES-' + encryptPayload(parsedArray);
+
+      // Search for email cookie or construct dynamic account name
+      let email = `Account_${importedCount + 1}_${id.slice(-4)}`;
+      if (Array.isArray(parsedArray)) {
+        const emailCookie = parsedArray.find(c => c && c.name && c.name.toLowerCase().includes('email'));
         if (emailCookie) email = emailCookie.value;
       }
 
@@ -101,18 +111,18 @@ app.post('/api/import', (req, res) => {
         id,
         user_identifier: email,
         access_tier: 'Premium 4K',
-        raw_payload: parsed,
+        raw_payload: parsedArray,
         token_string: token,
         is_used: false,
         status: 'active',
         created_at: new Date().toISOString()
       });
-      importedCount = 1;
-    }
+      importedCount++;
+    });
 
     res.json({ success: true, count: importedCount });
   } catch (err) {
-    res.status(400).json({ error: 'Invalid JSON structure. Please clean text format.' });
+    res.status(400).json({ error: 'Failed to extract valid cookies. Check text formatting.' });
   }
 });
 
